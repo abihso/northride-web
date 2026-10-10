@@ -46,3 +46,4 @@ Newly created accounts are active and verified immediately, so share the
 initial password with the user through a secure channel. Rider accounts still
 need to finish mobile onboarding and submit the required documents before they
 can be approved.
+# northride-web

@@ -6,6 +6,10 @@ import {
   useState,
   type FormEvent,
 } from "react";
+import HomeContentSection, {
+  type HomeContentDraft,
+  type HomePageContent,
+} from "./HomeContentSection";
 import "./App.css";
 
 type AdminUser = {
@@ -147,7 +151,8 @@ type Section =
   | "support"
   | "users"
   | "config"
-  | "pricing";
+  | "pricing"
+  | "home-content";
 
 const API_BASE_URL = (
   import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api"
@@ -217,6 +222,7 @@ function App() {
   const [rides, setRides] = useState<Ride[]>([]);
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [configs, setConfigs] = useState<SystemConfig[]>([]);
+  const [homeContent, setHomeContent] = useState<HomePageContent[]>([]);
   const [pricingRates, setPricingRates] = useState<PricingRates>({
     deliveryPerKm: "2.50",
     ridePerKm: "2.50",
@@ -245,6 +251,7 @@ function App() {
         ticketResponse,
         configResponse,
         pricingResponse,
+        homeContentResponse,
       ] =
         await Promise.all([
           apiRequest<{ data: Rider[] }>("/riders?limit=200"),
@@ -255,6 +262,7 @@ function App() {
           apiRequest<{ data: Ticket[] }>("/admin/support-tickets?limit=200"),
           apiRequest<{ data: SystemConfig[] }>("/system-config"),
           apiRequest<{ data: PricingRates }>("/admin/pricing-rates"),
+          apiRequest<{ data: HomePageContent[] }>("/admin/home-page-content"),
         ]);
       setRiders(readData(riderResponse));
       setUsers(readData(userResponse));
@@ -267,6 +275,7 @@ function App() {
       setPricingDrafts(nextPricingRates);
       const nextConfigs = readData(configResponse);
       setConfigs(nextConfigs);
+      setHomeContent(readData(homeContentResponse));
       setConfigDrafts(
         Object.fromEntries(
           nextConfigs.map((item) => [item.configKey, item.configValue ?? ""]),
@@ -343,6 +352,7 @@ function App() {
     setRides([]);
     setTickets([]);
     setConfigs([]);
+    setHomeContent([]);
   };
 
   const perform = async (key: string, operation: () => Promise<void>) => {
@@ -356,6 +366,91 @@ function App() {
     } finally {
       setBusyKey(null);
     }
+  };
+
+  const createHomeContent = async (draft: HomeContentDraft, image: File) => {
+    if (busyKey) return false;
+    setBusyKey("home-content-upload");
+    setDataError("");
+    setDataNotice("");
+    try {
+      const uploadResult = await apiRequest<{
+        data: { key: string };
+      }>("/admin/home-page-content/upload", {
+        method: "POST",
+        headers: { "Content-Type": image.type },
+        body: image,
+      });
+      const { key } = readData(uploadResult);
+
+      setBusyKey("home-content-create");
+      const result = await apiRequest<{ data: HomePageContent }>(
+        "/admin/home-page-content",
+        {
+          method: "POST",
+          body: JSON.stringify({
+            ...draft,
+            rating: draft.rating.trim() || null,
+            imageUrl: key,
+          }),
+        },
+      );
+      const created = readData(result);
+      setHomeContent((current) => [...current, created]);
+      setDataNotice(`Created ${created.contentType} card "${created.title}".`);
+      return true;
+    } catch (error) {
+      setDataError(
+        error instanceof Error ? error.message : "Could not create the dashboard card.",
+      );
+      return false;
+    } finally {
+      setBusyKey(null);
+    }
+  };
+
+  const toggleHomeContent = (record: HomePageContent) => {
+    void perform(`home-content-${record.homeContentId}`, async () => {
+      const result = await apiRequest<{ data: HomePageContent }>(
+        `/admin/home-page-content/${record.homeContentId}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({ isActive: !record.isActive }),
+        },
+      );
+      const updated = readData(result);
+      setHomeContent((current) =>
+        current.map((item) =>
+          item.homeContentId === updated.homeContentId ? updated : item,
+        ),
+      );
+      setDataNotice(
+        `${updated.contentType} card "${updated.title}" ${updated.isActive ? "published" : "hidden"}.`,
+      );
+    });
+  };
+
+  const deleteHomeContent = (record: HomePageContent) => {
+    if (
+      !window.confirm(
+        `Permanently delete the ${record.contentType} card "${record.title}"?`,
+      )
+    ) {
+      return;
+    }
+    void perform(`home-content-${record.homeContentId}`, async () => {
+      const result = await apiRequest<{ warning?: string }>(
+        `/admin/home-page-content/${record.homeContentId}`,
+        { method: "DELETE" },
+      );
+      setHomeContent((current) =>
+        current.filter((item) => item.homeContentId !== record.homeContentId),
+      );
+      setDataNotice(
+        result.warning ||
+          `Deleted ${record.contentType} card "${record.title}".`,
+      );
+    });
   };
 
   const updateRiderReview = async (
@@ -741,7 +836,8 @@ function App() {
     { key: "support", label: "Support", icon: "?" },
     { key: "users", label: "Users", icon: "◎" },
     { key: "config", label: "System settings", icon: "⚙" },
-    { key: "pricing", label: "Pricing", icon: "GHS" },
+    { key: "pricing", label: "Pricing", icon: "₵" },
+    { key: "home-content", label: "Home promotions", icon: "★" },
   ];
 
   return (
@@ -832,6 +928,7 @@ function App() {
                     tickets,
                     users,
                     configs,
+                    homeContent,
                   )}
                 </strong>
                 <span>Review and manage NorthRide operations</span>
@@ -986,6 +1083,15 @@ function App() {
               onSave={updatePricingRates}
             />
           ) : null}
+          {section === "home-content" ? (
+            <HomeContentSection
+              records={homeContent}
+              busyKey={busyKey}
+              onCreate={createHomeContent}
+              onToggle={toggleHomeContent}
+              onDelete={deleteHomeContent}
+            />
+          ) : null}
         </section>
         <footer className="footer">
           <span>NorthRide operations</span>
@@ -1005,6 +1111,7 @@ function sectionHeading(
   tickets: Ticket[],
   users: Account[],
   configs: SystemConfig[],
+  homeContent: HomePageContent[],
 ) {
   switch (section) {
     case "riders":
@@ -1023,6 +1130,8 @@ function sectionHeading(
       return `${configs.length} configuration items`;
     case "pricing":
       return "Ride and delivery rates";
+    case "home-content":
+      return `${homeContent.length} dashboard cards`;
     default:
       return "";
   }

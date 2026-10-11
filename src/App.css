@@ -153,6 +153,11 @@ td small { margin-top: 3px; color: #98a39d; font-size: 9px; }
 .ticket-controls { width: 120px; flex: 0 0 120px; display: grid; align-content: start; gap: 12px; }
 .ticket-controls select { width: 100%; }
 .config-card { display: grid; gap: 15px; }
+.home-content-layout { display: grid; gap: 18px; }
+.home-content-form { max-width: 880px; }
+.home-content-submit { display: flex; justify-content: flex-end; }
+.home-content-record { display: flex; align-items: center; gap: 14px; }
+.home-content-thumbnail { width: 76px; height: 58px; flex: 0 0 76px; border-radius: 7px; object-fit: cover; background: #edf1ee; }
 .config-heading { display: flex; justify-content: space-between; gap: 15px; }
 .config-heading code { padding: 4px 7px; align-self: flex-start; border-radius: 4px; color: #617269; background: #f1f5f2; font-size: 9px; }
 .config-edit { display: flex; gap: 9px; }
@@ -225,4 +230,7 @@ td small { margin-top: 3px; color: #98a39d; font-size: 9px; }
   .user-form-wide { grid-column: auto; }
   .users-actions { align-items: flex-start; flex-direction: column; }
   .pricing-grid { grid-template-columns: 1fr; }
+  .home-content-record { align-items: flex-start; flex-wrap: wrap; }
+  .home-content-record .record-copy { flex: 1; }
+  .home-content-record .record-actions { width: 100%; flex-direction: row; }
 }

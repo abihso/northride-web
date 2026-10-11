@@ -17,6 +17,14 @@ without related financial transactions or rider earnings.
 System-config keys are structural and can be edited only when marked editable;
 they cannot be deleted from the console.
 
+The Home promotions section manages promotion and suggestion cards shown on the
+customer dashboard. Admins upload JPG, PNG, or WebP card images (up to 5 MB)
+directly to the backend's private AWS S3 bucket. Cards can include distance,
+location, and rating details. Admins can publish, hide, or delete cards; only
+published cards are returned to the mobile app, which receives temporary signed
+image URLs. Apply the backend's `0018_home_page_content` Drizzle migration
+before using this section.
+
 ## Local development
 
 1. Start the NorthRide backend.
@@ -53,6 +61,10 @@ must confirm reviewing all six images before the approval control is enabled;
 the backend independently rejects approval if any required document is
 missing. Configure private AWS S3 storage for the backend before enabling rider
 document submissions.
+
+Dashboard images are sent to the authenticated backend, which validates and
+stores them in the private S3 bucket. The browser does not upload directly to
+S3, so the bucket does not need browser CORS rules for the admin web origin.
 
 The Users section can create customer, rider, and administrator accounts.
 Newly created accounts are active and verified immediately, so share the

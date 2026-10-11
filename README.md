@@ -2,7 +2,20 @@
 
 NorthRide Admin is a separate React web console for administrators. It uses the
 backend's existing session login and includes an operations overview, rider
-review queue, orders, support tickets, user accounts, and system configuration.
+review queue, orders, deliveries, rides, support tickets, user accounts, and
+system configuration.
+
+Administrators can edit account details, rider vehicle details, order and
+delivery status/assignments, ride status, support ticket
+status/priority/assignment, and editable system-config values. Ride and
+delivery per-kilometer prices can be changed in Pricing; customer quotes and
+payment totals use the saved rates plus the GHS 5.00 base fare. Deletion is
+restricted to eligible records:
+account deletion is blocked when transaction or service history exists, and
+orders/deliveries can only be removed while pending, unpaid, unassigned, and
+without related financial transactions or rider earnings.
+System-config keys are structural and can be edited only when marked editable;
+they cannot be deleted from the console.
 
 ## Local development
 

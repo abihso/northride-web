@@ -25,18 +25,41 @@ published cards are returned to the mobile app, which receives temporary signed
 image URLs. Apply the backend's `0018_home_page_content` Drizzle migration
 before using this section.
 
+The Shop management section lets admins create and edit shops, assign an
+existing account as the owner, set category and contact/location details,
+select the shop pickup point on the map, publish or close a shop, and manage
+its product catalog, prices, discounts,
+stock, availability, and featured status. Shop logos, cover images, and product
+images are uploaded as JPG, PNG, or WebP files up to 5 MB; private images are
+shown using temporary signed URLs. Customers can browse products only from
+open, verified Food and Groceries shops. Enter both shop
+coordinates to enable customer delivery checkout and server-priced delivery
+quotes. A shop with order history cannot be deleted; close it instead to
+preserve its records. Accounts that own shops must have their shop transferred
+or deleted before the account can be deleted.
+
+Customers can keep a cart from one shop at a time, choose a suggested delivery
+address, and pay with cash on delivery or Paystack card checkout. The backend
+recalculates product prices and delivery fees, checks and reserves stock, and
+saves order-item snapshots for order tracking. Apply the backend's
+`0020_shop_order_items` Drizzle migration before enabling checkout. Unpaid card
+orders are rechecked with Paystack after 60 minutes and failed or abandoned
+payments release their stock reservation. Customers can also cancel an unpaid
+order from My shop orders. The admin order queue includes the saved shop and
+product lines so staff can process and track each purchase.
+
 ## Local development
 
 1. Start the NorthRide backend.
 2. Install the web app dependencies with `npm install`.
-3. Set `VITE_API_BASE_URL` if the backend is not at `http://localhost:5000/api`.
-   The value should include the `/api` prefix.
+3. Set `VITE_API_BASE_URL` if the backend is not at
+   `http://localhost:4000/api`. The value should include the `/api` prefix.
 4. Run `npm run dev` and open the Vite URL shown in the terminal.
 
 For example, create an `admin-web/.env.local` file containing:
 
 ```dotenv
-VITE_API_BASE_URL=http://localhost:5000/api
+VITE_API_BASE_URL=http://localhost:4000/api
 ```
 
 The backend must allow the web app's origin in `CLIENT_ORIGINS`. Local backend

@@ -10,6 +10,13 @@ import HomeContentSection, {
   type HomeContentDraft,
   type HomePageContent,
 } from "./HomeContentSection";
+import ShopManagementSection, {
+  type ManagedProduct,
+  type ManagedShop,
+  type ManagedShopDetails,
+  type ProductDraft,
+  type ShopDraft,
+} from "./ShopManagementSection";
 import "./App.css";
 
 type AdminUser = {
@@ -72,10 +79,19 @@ type Order = {
   orderId: number;
   orderReference: string;
   orderType: string;
+  shopId: number;
+  shopName?: string;
+  items?: {
+    orderItemId: number;
+    productName: string;
+    quantity: number;
+    lineTotal: string | number;
+  }[];
   riderId: number | null;
   status: string;
   totalAmount: string | number;
   paymentStatus: string;
+  paymentMethod: string;
   orderPlacedAt: string;
   userId: number;
 };
@@ -152,16 +168,25 @@ type Section =
   | "users"
   | "config"
   | "pricing"
-  | "home-content";
+  | "home-content"
+  | "shops";
 
+const configuredApiBaseUrl = import.meta.env.VITE_API_BASE_URL?.trim();
 const API_BASE_URL = (
-  import.meta.env.VITE_API_BASE_URL || "http://localhost:5000/api"
+  configuredApiBaseUrl ||
+  (import.meta.env.DEV ? "http://localhost:4000/api" : "")
 ).replace(/\/$/, "");
 
 async function apiRequest<T>(
   path: string,
   options: RequestInit = {},
 ): Promise<T> {
+  if (!API_BASE_URL) {
+    throw new Error(
+      "VITE_API_BASE_URL is not configured for this admin deployment.",
+    );
+  }
+  const method = options.method || "GET";
   let response: Response;
   try {
     response = await fetch(`${API_BASE_URL}${path}`, {
@@ -174,7 +199,7 @@ async function apiRequest<T>(
     });
   } catch {
     throw new Error(
-      `Could not connect to ${API_BASE_URL}. Check the backend URL and that the server is running.`,
+      `Could not connect to ${API_BASE_URL}${path} (${method}). Check the backend URL and that the server is running.`,
     );
   }
 
@@ -182,7 +207,10 @@ async function apiRequest<T>(
     | { message?: string; user?: AdminUser; data?: T }
     | null;
   if (!response.ok) {
-    throw new Error(payload?.message || `Request failed (${response.status}).`);
+    throw new Error(
+      payload?.message ||
+        `${method} ${path} returned HTTP ${response.status} from ${API_BASE_URL}.`,
+    );
   }
   return payload as T;
 }
@@ -223,6 +251,7 @@ function App() {
   const [tickets, setTickets] = useState<Ticket[]>([]);
   const [configs, setConfigs] = useState<SystemConfig[]>([]);
   const [homeContent, setHomeContent] = useState<HomePageContent[]>([]);
+  const [shops, setShops] = useState<ManagedShop[]>([]);
   const [pricingRates, setPricingRates] = useState<PricingRates>({
     deliveryPerKm: "2.50",
     ridePerKm: "2.50",
@@ -252,6 +281,7 @@ function App() {
         configResponse,
         pricingResponse,
         homeContentResponse,
+        shopResponse,
       ] =
         await Promise.all([
           apiRequest<{ data: Rider[] }>("/riders?limit=200"),
@@ -263,6 +293,7 @@ function App() {
           apiRequest<{ data: SystemConfig[] }>("/system-config"),
           apiRequest<{ data: PricingRates }>("/admin/pricing-rates"),
           apiRequest<{ data: HomePageContent[] }>("/admin/home-page-content"),
+          apiRequest<{ data: ManagedShop[] }>("/shops?limit=500"),
         ]);
       setRiders(readData(riderResponse));
       setUsers(readData(userResponse));
@@ -276,6 +307,7 @@ function App() {
       const nextConfigs = readData(configResponse);
       setConfigs(nextConfigs);
       setHomeContent(readData(homeContentResponse));
+      setShops(readData(shopResponse));
       setConfigDrafts(
         Object.fromEntries(
           nextConfigs.map((item) => [item.configKey, item.configValue ?? ""]),
@@ -353,6 +385,7 @@ function App() {
     setTickets([]);
     setConfigs([]);
     setHomeContent([]);
+    setShops([]);
   };
 
   const perform = async (key: string, operation: () => Promise<void>) => {
@@ -367,6 +400,121 @@ function App() {
       setBusyKey(null);
     }
   };
+
+  const runShopAction = async <T,>(
+    key: string,
+    operation: () => Promise<T>,
+  ): Promise<T | null> => {
+    if (busyKey) return null;
+    setBusyKey(key);
+    setDataError("");
+    setDataNotice("");
+    try {
+      return await operation();
+    } catch (error) {
+      setDataError(
+        error instanceof Error ? error.message : "The shop management action failed.",
+      );
+      return null;
+    } finally {
+      setBusyKey(null);
+    }
+  };
+
+  const createShop = (draft: ShopDraft) =>
+    runShopAction("shop-create", async () => {
+      const result = await apiRequest<{ data: ManagedShop }>("/shops", {
+        method: "POST",
+        body: JSON.stringify(draft),
+      });
+      const created = readData(result);
+      setShops((current) => [created, ...current]);
+      setDataNotice(
+        `Created shop "${created.shopName}". Verify it and mark it open to show it in the customer app.`,
+      );
+      return created;
+    });
+
+  const updateShop = (shopId: number, draft: ShopDraft) =>
+    runShopAction(`shop-${shopId}`, async () => {
+      const result = await apiRequest<{ data: ManagedShop }>(`/shops/${shopId}`, {
+        method: "PATCH",
+        body: JSON.stringify(draft),
+      });
+      const updated = readData(result);
+      setShops((current) =>
+        current.map((shop) => (shop.shopId === shopId ? updated : shop)),
+      );
+      setDataNotice(`Updated shop "${updated.shopName}".`);
+      return updated;
+    });
+
+  const deleteShop = (shop: ManagedShop) =>
+    runShopAction(`shop-${shop.shopId}`, async () => {
+      await apiRequest(`/shops/${shop.shopId}`, { method: "DELETE" });
+      setShops((current) =>
+        current.filter((item) => item.shopId !== shop.shopId),
+      );
+      setDataNotice(`Deleted shop "${shop.shopName}".`);
+      return true;
+    }).then((result) => result === true);
+
+  const loadShop = async (shopId: number) => {
+    try {
+      const result = await apiRequest<{ data: ManagedShopDetails }>(
+        `/shops/${shopId}`,
+      );
+      return readData(result);
+    } catch (error) {
+      console.error(`Could not load products for shop ${shopId}:`, error);
+      return null;
+    }
+  };
+
+  const createProduct = (shopId: number, draft: ProductDraft) =>
+    runShopAction(`product-create-${shopId}`, async () => {
+      const result = await apiRequest<{ data: ManagedProduct }>("/products", {
+        method: "POST",
+        body: JSON.stringify({ shopId, ...draft }),
+      });
+      const created = readData(result);
+      setDataNotice(`Added "${created.productName}" to the shop catalog.`);
+      return created;
+    });
+
+  const updateProduct = (productId: number, draft: ProductDraft) =>
+    runShopAction(`product-${productId}`, async () => {
+      const result = await apiRequest<{ data: ManagedProduct }>(
+        `/products/${productId}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify(draft),
+        },
+      );
+      const updated = readData(result);
+      setDataNotice(`Updated product "${updated.productName}".`);
+      return updated;
+    });
+
+  const deleteProduct = (product: ManagedProduct) =>
+    runShopAction(`product-${product.productId}`, async () => {
+      await apiRequest(`/products/${product.productId}`, { method: "DELETE" });
+      setDataNotice(`Deleted product "${product.productName}".`);
+      return true;
+    }).then((result) => result === true);
+
+  const uploadShopImage = (image: File) =>
+    runShopAction("shop-image-upload", async () => {
+      const result = await apiRequest<{ data: { key: string } }>(
+        "/admin/shop-images/upload",
+        {
+          method: "POST",
+          headers: { "Content-Type": image.type },
+          body: image,
+        },
+      );
+      return readData(result).key;
+    });
 
   const createHomeContent = async (draft: HomeContentDraft, image: File) => {
     if (busyKey) return false;
@@ -838,6 +986,7 @@ function App() {
     { key: "config", label: "System settings", icon: "⚙" },
     { key: "pricing", label: "Pricing", icon: "₵" },
     { key: "home-content", label: "Home promotions", icon: "★" },
+    { key: "shops", label: "Shop management", icon: "▣" },
   ];
 
   return (
@@ -929,6 +1078,7 @@ function App() {
                     users,
                     configs,
                     homeContent,
+                    shops,
                   )}
                 </strong>
                 <span>Review and manage NorthRide operations</span>
@@ -1092,6 +1242,21 @@ function App() {
               onDelete={deleteHomeContent}
             />
           ) : null}
+          {section === "shops" ? (
+            <ShopManagementSection
+              shops={shops}
+              owners={users}
+              busyKey={busyKey}
+              onCreateShop={createShop}
+              onUpdateShop={updateShop}
+              onDeleteShop={deleteShop}
+              onLoadShop={loadShop}
+              onCreateProduct={createProduct}
+              onUpdateProduct={updateProduct}
+              onDeleteProduct={deleteProduct}
+              onUploadImage={uploadShopImage}
+            />
+          ) : null}
         </section>
         <footer className="footer">
           <span>NorthRide operations</span>
@@ -1112,6 +1277,7 @@ function sectionHeading(
   users: Account[],
   configs: SystemConfig[],
   homeContent: HomePageContent[],
+  shops: ManagedShop[],
 ) {
   switch (section) {
     case "riders":
@@ -1132,6 +1298,8 @@ function sectionHeading(
       return "Ride and delivery rates";
     case "home-content":
       return `${homeContent.length} dashboard cards`;
+    case "shops":
+      return `${shops.length} shops`;
     default:
       return "";
   }
@@ -1691,15 +1859,30 @@ function OrdersSection({
   return (
     <div className="table-wrap">
       <table>
-        <thead><tr><th>Order</th><th>Type</th><th>Customer</th><th>Total</th><th>Payment</th><th>Rider</th><th>Status</th><th>Placed</th><th>Actions</th></tr></thead>
+        <thead><tr><th>Order</th><th>Type</th><th>Shop / Items</th><th>Customer</th><th>Total</th><th>Payment</th><th>Rider</th><th>Status</th><th>Placed</th><th>Actions</th></tr></thead>
         <tbody>
           {orders.map((order) => (
             <tr key={order.orderId}>
               <td><strong>{order.orderReference}</strong><small>#{order.orderId}</small></td>
               <td>{titleCase(order.orderType)}</td>
+              <td>
+                <strong>{order.shopName || `Shop #${order.shopId}`}</strong>
+                {order.items?.length ? (
+                  <small>
+                    {order.items
+                      .map((item) => `${item.quantity} × ${item.productName}`)
+                      .join(" · ")}
+                  </small>
+                ) : (
+                  <small>No product details</small>
+                )}
+              </td>
               <td>Account #{order.userId}</td>
               <td>{money(order.totalAmount)}</td>
-              <td><Status value={order.paymentStatus} /></td>
+              <td>
+                <Status value={order.paymentStatus} />
+                <small>{titleCase(order.paymentMethod)}</small>
+              </td>
               <td>
                 <select
                   className="status-select"
@@ -1747,9 +1930,14 @@ function OrdersSection({
                     busyKey === `order-${order.orderId}` ||
                     order.status !== "pending" ||
                     order.paymentStatus !== "pending" ||
-                    order.riderId !== null
+                    order.riderId !== null ||
+                    Boolean(order.items?.length)
                   }
-                  title="Only unassigned, pending, unpaid orders can be deleted."
+                  title={
+                    order.items?.length
+                      ? "Shop orders must be cancelled to preserve inventory and order history."
+                      : "Only unassigned, pending, unpaid orders can be deleted."
+                  }
                   onClick={() => onDelete(order)}
                 >
                   Delete

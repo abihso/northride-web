@@ -5,7 +5,7 @@ export type HomePageContent = {
   contentType: "promotion" | "suggestion";
   title: string;
   imageUrl: string;
-  distance: string | null;
+  price: string | null;
   location: string | null;
   rating: string | null;
   displayOrder: number;
@@ -16,7 +16,7 @@ export type HomePageContent = {
 export type HomeContentDraft = {
   contentType: HomePageContent["contentType"];
   title: string;
-  distance: string;
+  price: string;
   location: string;
   rating: string;
 };
@@ -24,7 +24,7 @@ export type HomeContentDraft = {
 const emptyDraft: HomeContentDraft = {
   contentType: "promotion",
   title: "",
-  distance: "",
+  price: "",
   location: "",
   rating: "",
 };
@@ -120,12 +120,15 @@ export default function HomeContentSection({
             {imageError ? <small role="alert">{imageError}</small> : null}
           </label>
           <label>
-            Distance <span className="optional-label">Optional</span>
+            Price (GH₵) <span className="optional-label">Optional</span>
             <input
-              value={draft.distance}
-              onChange={(event) => setDraft((current) => ({ ...current, distance: event.target.value }))}
-              placeholder="15 KM away"
-              maxLength={50}
+              type="number"
+              min="0"
+              max="99999999.99"
+              step="0.01"
+              value={draft.price}
+              onChange={(event) => setDraft((current) => ({ ...current, price: event.target.value }))}
+              placeholder="0.00"
             />
           </label>
           <label>
@@ -173,7 +176,11 @@ export default function HomeContentSection({
                   <span className="status-pill neutral">{record.contentType}</span>
                 </div>
                 <p>
-                  {[record.distance, record.location, record.rating ? `★ ${record.rating}` : null]
+                  {[
+                    record.price === null ? null : `GH₵ ${Number(record.price).toFixed(2)}`,
+                    record.location,
+                    record.rating ? `★ ${record.rating}` : null,
+                  ]
                     .filter(Boolean)
                     .join(" · ") || "No additional card details"}
                 </p>

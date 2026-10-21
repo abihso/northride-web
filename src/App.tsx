@@ -538,6 +538,7 @@ function App() {
           method: "POST",
           body: JSON.stringify({
             ...draft,
+            productId: Number(draft.productId),
             rating: draft.rating.trim() || null,
             imageUrl: key,
           }),
@@ -574,6 +575,30 @@ function App() {
       );
       setDataNotice(
         `${updated.contentType} card "${updated.title}" ${updated.isActive ? "published" : "hidden"}.`,
+      );
+    });
+  };
+
+  const linkHomeContentProduct = (
+    record: HomePageContent,
+    productId: number,
+  ) => {
+    void perform(`home-content-${record.homeContentId}`, async () => {
+      const result = await apiRequest<{ data: HomePageContent }>(
+        `/admin/home-page-content/${record.homeContentId}`,
+        {
+          method: "PATCH",
+          body: JSON.stringify({ productId }),
+        },
+      );
+      const updated = readData(result);
+      setHomeContent((current) =>
+        current.map((item) =>
+          item.homeContentId === updated.homeContentId ? updated : item,
+        ),
+      );
+      setDataNotice(
+        `Linked "${updated.title}" to ${updated.linkedProduct?.productName ?? "the selected product"}.`,
       );
     });
   };
@@ -1236,8 +1261,11 @@ function App() {
           {section === "home-content" ? (
             <HomeContentSection
               records={homeContent}
+              shops={shops}
               busyKey={busyKey}
               onCreate={createHomeContent}
+              onLoadShop={loadShop}
+              onLinkProduct={linkHomeContentProduct}
               onToggle={toggleHomeContent}
               onDelete={deleteHomeContent}
             />
